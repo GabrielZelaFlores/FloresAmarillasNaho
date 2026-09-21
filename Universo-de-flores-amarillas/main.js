@@ -15,6 +15,8 @@
   const exploreUi=document.getElementById('explore-ui');
   const exploreStatus=document.getElementById('explore-status');
   const letterProgress=document.getElementById('letter-progress');
+  const showBouquetButton=document.getElementById('show-bouquet');
+  const bouquetFinale=document.getElementById('bouquet-finale');
   const movePad=document.getElementById('move-pad');
   const letterDialog=document.getElementById('letter-dialog');
   const orientationTip=document.getElementById('orientation-tip');
@@ -57,6 +59,7 @@
     exploreStatus.textContent='Encontraste todas las cartas. Mira el jardín desde aquí.';
     document.querySelector('.desktop-instructions').textContent='Arrastra para girar · rueda para acercar o alejar';
     document.querySelector('.touch-instructions').textContent='Arrastra para girar · pellizca para acercar o alejar';
+    showBouquetButton.hidden=false;
     window.flowerGardenShowOverview?.();
   }
   function closeLetter(){
@@ -78,9 +81,11 @@
   }
   document.getElementById('close-letter').addEventListener('click',closeLetter);
   letterDialog.addEventListener('click',event=>{if(event.target===letterDialog)closeLetter();});
-  function stopExplore(){exploring=false;dragging=false;overviewPointers.clear();pinchDistance=0;heldKeys.clear();heldPad.clear();stage.classList.remove('exploring');exploreUi.hidden=true;movePad.hidden=true;closeLetter();orbitYaw=0;orbitPitch=.08;world.setOrbit(0,0,0);window.flowerGardenStopExplore?.();}
+  function stopExplore(){exploring=false;dragging=false;overviewPointers.clear();pinchDistance=0;heldKeys.clear();heldPad.clear();stage.classList.remove('exploring','bouquet-mode');exploreUi.hidden=true;bouquetFinale.hidden=true;movePad.hidden=true;closeLetter();orbitYaw=0;orbitPitch=.08;world.setOrbit(0,0,0);window.flowerGardenStopExplore?.();}
   exploreButton.addEventListener('click',()=>{exploring=true;orbitYaw=0;orbitPitch=.08;stage.classList.add('exploring');exploreUi.hidden=false;movePad.hidden=overviewShown;world.burst();window.flowerGardenStartExplore?.();if(overviewShown)window.flowerGardenShowOverview?.();});
   document.getElementById('leave-explore').addEventListener('click',()=>{stopExplore();scrollTo({top:experience.offsetTop,behavior:reducedMotion?'instant':'smooth'});});
+  showBouquetButton.addEventListener('click',()=>{stage.classList.add('bouquet-mode');exploreUi.hidden=true;bouquetFinale.hidden=false;window.flowerGardenShowBouquet?.();});
+  document.getElementById('back-to-garden').addEventListener('click',()=>{stage.classList.remove('bouquet-mode');bouquetFinale.hidden=true;exploreUi.hidden=false;window.flowerGardenShowOverview?.();});
   for(const button of movePad.querySelectorAll('button')){
     const direction=button.dataset.move;
     button.addEventListener('pointerdown',event=>{event.preventDefault();button.setPointerCapture(event.pointerId);heldPad.add(direction);button.classList.add('is-held');});

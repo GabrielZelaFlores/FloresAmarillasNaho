@@ -43,6 +43,16 @@ import * as THREE from 'three';
   };
 
   const villageGroup = new THREE.Group();
+  const bouquetGroup = new THREE.Group();
+  const bouquetMessageGroup = new THREE.Group();
+  const bouquetEnergyGroup = new THREE.Group();
+  const bouquetAnimatedParts = [];
+  const bouquetFlowerHeads = [];
+  const bouquetMessages = [];
+  const bouquetEnergyRings = [];
+  const bouquetEnergyNodes = [];
+  let bouquetStardust = null;
+  let bouquetActive = false;
   const hiddenLetters = [];
   const letterTargets = [];
   let overviewActive = false;
@@ -1077,6 +1087,189 @@ import * as THREE from 'three';
     villageGroup.add(letterGroup);
   }
 
+  function buildBouquet() {
+    const stemMaterial = new THREE.MeshStandardMaterial({ color: 0x276b3d, roughness: .72 });
+    const leafMaterial = new THREE.MeshStandardMaterial({ color: 0x3f9254, emissive: 0x0b2816, emissiveIntensity: .22, roughness: .65, side: THREE.DoubleSide });
+    const petalMaterials = [
+      new THREE.MeshStandardMaterial({ color: 0xffc928, emissive: 0x7b4500, emissiveIntensity: .24, roughness: .48 }),
+      new THREE.MeshStandardMaterial({ color: 0xffdc51, emissive: 0x6d3b00, emissiveIntensity: .2, roughness: .5 })
+    ];
+    const centerMaterial = new THREE.MeshStandardMaterial({ color: 0x4a1f0b, emissive: 0x1e0802, emissiveIntensity: .3, roughness: .88 });
+    const paperMaterial = new THREE.MeshStandardMaterial({ color: 0xd7ad69, emissive: 0x33200c, emissiveIntensity: .12, roughness: .82, transparent: true, opacity: .94, side: THREE.DoubleSide });
+    const ribbonMaterial = new THREE.MeshStandardMaterial({ color: 0xffd562, emissive: 0x704000, emissiveIntensity: .35, metalness: .18, roughness: .42, side: THREE.DoubleSide });
+    const stemGeometry = new THREE.CylinderGeometry(.075, .105, 1, 8);
+    const petalGeometry = new THREE.SphereGeometry(.5, 12, 8);
+    const centerGeometry = new THREE.SphereGeometry(.68, 18, 12);
+    const leafShape = new THREE.Shape();
+    leafShape.moveTo(0, -.72);
+    leafShape.bezierCurveTo(.72, -.32, .66, .38, 0, .82);
+    leafShape.bezierCurveTo(-.66, .38, -.72, -.32, 0, -.72);
+    const leafGeometry = new THREE.ShapeGeometry(leafShape, 10);
+    const up = new THREE.Vector3(0, 1, 0);
+    const flowers = [
+      [-2.65, 2.25, .72, .92], [-1.55, 4.18, -.75, 1.02], [-.45, 2.95, 1.35, 1.12],
+      [.65, 5.35, -.25, .88], [1.55, 4.08, .92, 1.03], [2.7, 2.35, -.62, .92], [.25, 3.58, 1.65, 1.16]
+    ];
+
+    const addStem = (from, to) => {
+      const direction = new THREE.Vector3().subVectors(to, from);
+      const stem = new THREE.Mesh(stemGeometry, stemMaterial);
+      stem.position.copy(from).add(to).multiplyScalar(.5);
+      stem.scale.y = direction.length();
+      stem.quaternion.setFromUnitVectors(up, direction.clone().normalize());
+      bouquetGroup.add(stem);
+    };
+
+    flowers.forEach(([x, y, z, size], flowerIndex) => {
+      const bottom = new THREE.Vector3(x * .12, -4.5, z + .35);
+      const head = new THREE.Vector3(x, y, z);
+      addStem(bottom, new THREE.Vector3(x, y - .3 * size, z));
+      for (let leafIndex = 0; leafIndex < 3; leafIndex++) {
+        const progress = .28 + leafIndex * .18;
+        const leaf = new THREE.Mesh(leafGeometry, leafMaterial);
+        leaf.position.lerpVectors(bottom, head, progress);
+        const side = (leafIndex + flowerIndex) % 2 ? 1 : -1;
+        leaf.position.x += side * (.38 + leafIndex * .07);
+        leaf.scale.set(.62 + leafIndex * .08, .95 + leafIndex * .11, 1);
+        leaf.rotation.set(.12 * side, .2 * side, side * (.78 + leafIndex * .15));
+        leaf.userData.baseRotation = leaf.rotation.clone();
+        leaf.userData.phase = flowerIndex * 1.37 + leafIndex * 2.1;
+        leaf.userData.motion = 'leaf';
+        bouquetAnimatedParts.push(leaf);
+        bouquetGroup.add(leaf);
+      }
+
+      const flower = new THREE.Group();
+      flower.position.copy(head);
+      flower.rotation.y = (flowerIndex - 3) * .035;
+      flower.userData.baseYaw = flower.rotation.y;
+      bouquetFlowerHeads.push(flower);
+      for (let ring = 0; ring < 2; ring++) {
+        const count = ring ? 13 : 11;
+        for (let i = 0; i < count; i++) {
+          const angle = i / count * Math.PI * 2 + ring * .16;
+          const petal = new THREE.Mesh(petalGeometry, petalMaterials[ring]);
+          const radius = (ring ? .77 : 1.02) * size;
+          petal.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, ring ? .02 : -.05);
+          petal.scale.set(.38 * size, .82 * size, .13 * size);
+          petal.rotation.z = angle - Math.PI / 2;
+          petal.rotation.x = ring ? -.1 : .08;
+          petal.userData.baseRotation = petal.rotation.clone();
+          petal.userData.phase = flowerIndex * 1.9 + i * .47 + ring;
+          petal.userData.motion = 'petal';
+          bouquetAnimatedParts.push(petal);
+          flower.add(petal);
+        }
+      }
+      const center = new THREE.Mesh(centerGeometry, centerMaterial);
+      center.position.z = .2;
+      center.scale.set(size, size, .38 * size);
+      flower.add(center);
+      bouquetGroup.add(flower);
+    });
+
+    const wrapper = new THREE.Mesh(new THREE.ConeGeometry(3.25, 5.4, 5, 1, true), paperMaterial);
+    wrapper.position.set(0, -2.05, .42);
+    wrapper.rotation.set(Math.PI, 0, Math.PI * .2);
+    bouquetGroup.add(wrapper);
+    const ribbon = new THREE.Mesh(new THREE.TorusGeometry(.82, .16, 10, 32), ribbonMaterial);
+    ribbon.position.set(0, -3.55, 1.55);
+    ribbon.scale.y = .6;
+    bouquetGroup.add(ribbon);
+    for (const side of [-1, 1]) {
+      const tail = new THREE.Mesh(new THREE.PlaneGeometry(.5, 1.8), ribbonMaterial);
+      tail.position.set(side * .28, -4.25, 1.48);
+      tail.rotation.z = side * .24;
+      bouquetGroup.add(tail);
+    }
+    const glow = new THREE.PointLight(0xffd36a, 3.8, 22, 2);
+    glow.position.set(0, 3, 6);
+    bouquetGroup.add(glow);
+    bouquetGroup.visible = false;
+    scene.add(bouquetGroup);
+
+    const makeEnergyRing = (radius, color, opacity) => {
+      const points = [];
+      for (let i = 0; i < 160; i++) {
+        const angle = i / 160 * Math.PI * 2;
+        points.push(new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, 0));
+      }
+      const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false });
+      const ring = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(points), material);
+      bouquetEnergyRings.push(ring);
+      bouquetEnergyGroup.add(ring);
+      return ring;
+    };
+    const ringA = makeEnergyRing(5.15, 0xffd34e, .34);
+    const ringB = makeEnergyRing(4.25, 0xffef9a, .2);
+    const ringC = makeEnergyRing(5.75, 0x70b557, .16);
+    ringA.position.y = .35;
+    ringB.position.y = .6; ringB.rotation.x = Math.PI * .56;
+    ringC.position.y = .2; ringC.rotation.y = Math.PI * .5; ringC.scale.y = .82;
+    bouquetEnergyRings.forEach(ring => { ring.userData.baseScale = ring.scale.clone(); });
+
+    for (let i = 0; i < 14; i++) {
+      const color = i % 3 === 0 ? 0x7ac65e : 0xffd75e;
+      const node = new THREE.Mesh(
+        new THREE.SphereGeometry(i % 3 === 0 ? .075 : .055, 10, 8),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .78, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      node.userData.radius = 4.2 + (i % 3) * .62;
+      node.userData.phase = i / 14 * Math.PI * 2;
+      node.userData.speed = .12 + (i % 4) * .025;
+      node.userData.baseY = .35 + Math.sin(i * 1.7) * 2.8;
+      bouquetEnergyNodes.push(node);
+      bouquetEnergyGroup.add(node);
+    }
+
+    const particleCount = lowPower ? 90 : 180;
+    const particlePositions = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+      const radius = 2.8 + Math.random() * 4.1;
+      const angle = Math.random() * Math.PI * 2;
+      particlePositions[i * 3] = Math.cos(angle) * radius;
+      particlePositions[i * 3 + 1] = -4.2 + Math.random() * 10.8;
+      particlePositions[i * 3 + 2] = Math.sin(angle) * radius * .48 - 1.2;
+    }
+    const particleGeometry = new THREE.BufferGeometry();
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    bouquetStardust = new THREE.Points(particleGeometry, new THREE.PointsMaterial({ color: 0xffda66, size: .075, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false }));
+    bouquetEnergyGroup.add(bouquetStardust);
+    bouquetEnergyGroup.visible = false;
+    scene.add(bouquetEnergyGroup);
+
+    const affirmations = [
+      ['SÉ QUE PUEDES SOLA', .1, 5.1, .1], ['ERES MUY FUERTE', .9, 3.85, 1.4],
+      ['ERES MUY INTELIGENTE', 1.7, 2.45, 2.8], ['ERES RESILIENTE', 2.5, 1.05, 4.1],
+      ['CONFÍA EN TI', 3.3, -.25, 5.5], ['VAS A LOGRARLO', 4.1, -1.45, 6.9],
+      ['SIGUE ADELANTE', 4.9, -2.55, 8.2], ['TU ESFUERZO VALE', 5.7, -3.35, 9.6]
+    ];
+    affirmations.forEach(([message, angle, y, phase], index) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024; canvas.height = 128;
+      const context = canvas.getContext('2d');
+      context.textAlign = 'center'; context.textBaseline = 'middle';
+      context.font = '800 42px Arial, sans-serif';
+      context.letterSpacing = '5px';
+      context.shadowColor = '#ffd86f'; context.shadowBlur = 18;
+      context.fillStyle = index % 2 ? '#fff0bc' : '#ffd969';
+      context.fillText(message, canvas.width / 2, canvas.height / 2);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.minFilter = THREE.LinearFilter;
+      const material = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: .4, depthWrite: false, depthTest: true });
+      const sprite = new THREE.Sprite(material);
+      const width = Math.min(5.8, 2.7 + message.length * .13);
+      sprite.scale.set(width, width * .125, 1);
+      sprite.position.set(Math.cos(angle) * 7.15, y, Math.sin(angle) * 3.8 - 1.3);
+      sprite.userData.baseY = y;
+      sprite.userData.phase = phase; sprite.userData.baseOpacity = .34 + (index % 3) * .04;
+      bouquetMessages.push(sprite); bouquetMessageGroup.add(sprite);
+    });
+    bouquetMessageGroup.visible = false;
+    scene.add(bouquetMessageGroup);
+  }
+
   function updateRoamCamera(yaw, pitch) {
     camera.position.copy(roamPosition);
     camera.lookAt(roamPosition.x + Math.sin(yaw) * Math.cos(pitch), roamPosition.y - Math.sin(pitch), roamPosition.z - Math.cos(yaw) * Math.cos(pitch));
@@ -1156,6 +1349,7 @@ import * as THREE from 'three';
     buildGardenDetails();
     buildFlyingHeart();
     buildHiddenLetters();
+    buildBouquet();
     buildAtmosphereSpecks();
 
     window.addEventListener('resize', onResize);
@@ -2672,6 +2866,49 @@ import * as THREE from 'three';
         marker.lookAt(camera.position);
       });
     }
+    if (bouquetActive) {
+      const bouquetSpin = t * .1;
+      bouquetGroup.rotation.y = bouquetSpin;
+      bouquetGroup.rotation.z = Math.sin(t * .24) * .018;
+      bouquetGroup.position.y = Math.sin(t * .55) * .09;
+      bouquetAnimatedParts.forEach((part, index) => {
+        const base = part.userData.baseRotation;
+        const phase = part.userData.phase;
+        if (part.userData.motion === 'leaf') {
+          part.rotation.x = base.x + Math.sin(t * .9 + phase) * .075;
+          part.rotation.y = base.y + Math.cos(t * .72 + phase) * .1;
+          part.rotation.z = base.z + Math.sin(t * .64 + phase) * .045;
+        } else {
+          part.rotation.x = base.x + Math.sin(t * .82 + phase + index * .01) * .045;
+          part.rotation.y = base.y + Math.cos(t * .68 + phase) * .035;
+        }
+      });
+      bouquetFlowerHeads.forEach(flower => { flower.rotation.y = flower.userData.baseYaw - bouquetSpin; });
+      bouquetEnergyRings[0].rotation.z = t * .075;
+      bouquetEnergyRings[0].rotation.x = Math.sin(t * .16) * .12;
+      bouquetEnergyRings[1].rotation.x = Math.PI * .56 + t * .105;
+      bouquetEnergyRings[1].rotation.z = -t * .055;
+      bouquetEnergyRings[2].rotation.y = Math.PI * .5 - t * .085;
+      bouquetEnergyRings[2].rotation.z = Math.sin(t * .13) * .22;
+      bouquetEnergyRings.forEach((ring, index) => {
+        const pulse = 1 + Math.sin(t * (1.1 + index * .2) + index) * .018;
+        ring.scale.copy(ring.userData.baseScale).multiplyScalar(pulse);
+        ring.material.opacity = (.16 + (2-index) * .07) * (.78 + Math.sin(t * 1.7 + index) * .22);
+      });
+      bouquetEnergyNodes.forEach((node, index) => {
+        const angle = t * node.userData.speed + node.userData.phase;
+        node.position.set(Math.cos(angle) * node.userData.radius, node.userData.baseY + Math.sin(angle * 2.1) * .28, Math.sin(angle) * node.userData.radius * .48 - 1);
+        node.scale.setScalar(.8 + Math.sin(t * 2.4 + index) * .3);
+      });
+      bouquetStardust.rotation.y = t * .045;
+      bouquetStardust.rotation.z = Math.sin(t * .09) * .04;
+      bouquetMessageGroup.rotation.y = t * .105;
+      bouquetMessages.forEach((message, index) => {
+        const phase = message.userData.phase;
+        message.position.y = message.userData.baseY + Math.cos(t * .24 + phase) * .22;
+        message.material.opacity = message.userData.baseOpacity * (.72 + Math.sin(t * .45 + phase) * .28);
+      });
+    }
     villageGroup.rotation.y = Math.sin(elapsed * 0.02) * 0.022 * state.drift;
 
     composer.render(delta);
@@ -2680,6 +2917,10 @@ import * as THREE from 'three';
 
   function onResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
+    if (bouquetActive) {
+      camera.fov = window.innerWidth < 700 ? 52 : 43;
+      camera.position.z = window.innerWidth < 700 ? 21.5 : 18.5;
+    }
     camera.updateProjectionMatrix();
 
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -2703,6 +2944,12 @@ import * as THREE from 'three';
   };
   window.flowerGardenStartExplore = () => {
     if (!camera) return;
+    bouquetActive = false;
+    bouquetGroup.visible = false;
+    bouquetMessageGroup.visible = false;
+    bouquetEnergyGroup.visible = false;
+    villageGroup.visible = true;
+    if (dynamicObjects.flyingHeart) dynamicObjects.flyingHeart.visible = true;
     overviewActive = false;
     roamActive = true;
     letterGroup.visible = true;
@@ -2712,6 +2959,12 @@ import * as THREE from 'three';
   };
   window.flowerGardenStopExplore = () => {
     if (!camera) return;
+    bouquetActive = false;
+    bouquetGroup.visible = false;
+    bouquetMessageGroup.visible = false;
+    bouquetEnergyGroup.visible = false;
+    villageGroup.visible = true;
+    if (dynamicObjects.flyingHeart) dynamicObjects.flyingHeart.visible = true;
     overviewActive = false;
     roamActive = false;
     letterGroup.visible = false;
@@ -2726,6 +2979,12 @@ import * as THREE from 'three';
   };
   window.flowerGardenShowOverview = () => {
     if (!camera) return;
+    bouquetActive = false;
+    bouquetGroup.visible = false;
+    bouquetMessageGroup.visible = false;
+    bouquetEnergyGroup.visible = false;
+    villageGroup.visible = true;
+    if (dynamicObjects.flyingHeart) dynamicObjects.flyingHeart.visible = true;
     roamActive = false;
     overviewActive = true;
     letterGroup.visible = false;
@@ -2735,6 +2994,22 @@ import * as THREE from 'three';
     overviewPolar = Math.atan2(105, 84);
     overviewDistance = Math.hypot(84, 105);
     updateOverviewCamera();
+  };
+  window.flowerGardenShowBouquet = () => {
+    if (!camera) return;
+    roamActive = false;
+    overviewActive = false;
+    bouquetActive = true;
+    villageGroup.visible = false;
+    bouquetGroup.visible = true;
+    bouquetMessageGroup.visible = true;
+    bouquetEnergyGroup.visible = true;
+    if (dynamicObjects.flyingHeart) dynamicObjects.flyingHeart.visible = false;
+    camera.fov = window.innerWidth < 700 ? 52 : 43;
+    camera.updateProjectionMatrix();
+    camera.position.set(0, 1.2, window.innerWidth < 700 ? 21.5 : 18.5);
+    controls.target.set(0, .55, 0);
+    controls.update();
   };
   window.flowerGardenOrbitOverview = (yawDelta, polarDelta, zoomDelta = 0) => {
     if (!overviewActive || !camera) return;
